@@ -1,0 +1,198 @@
+#include <Windows.h>
+#include <chrono>
+#include <thread>
+#include "Source.h"
+
+#pragma comment(lib, "winmm.lib")
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+
+using namespace std;
+using namespace std::chrono;
+
+#define SAMPLE_RATE 8000
+
+void threadedBytebeat(BYTE(*formula)(int), int duration_seconds) {
+    thread t([=]() {
+        int total_samples = SAMPLE_RATE * duration_seconds;
+        BYTE* buffer = new BYTE[total_samples];
+
+        for (int t = 0; t < total_samples; t++) {
+            buffer[t] = formula(t) & 0xFF;
+        }
+
+        WAVEFORMATEX wfx = {};
+        wfx.wFormatTag = WAVE_FORMAT_PCM;
+        wfx.nChannels = 1;
+        wfx.nSamplesPerSec = SAMPLE_RATE;
+        wfx.wBitsPerSample = 8;
+        wfx.nBlockAlign = 1;
+        wfx.nAvgBytesPerSec = SAMPLE_RATE;
+
+        WAVEHDR hdr = {};
+        hdr.lpData = (LPSTR)buffer;
+        hdr.dwBufferLength = total_samples;
+
+        HWAVEOUT hWaveOut;
+        waveOutOpen(&hWaveOut, WAVE_MAPPER, &wfx, 0, 0, CALLBACK_NULL);
+        waveOutPrepareHeader(hWaveOut, &hdr, sizeof(hdr));
+        waveOutWrite(hWaveOut, &hdr, sizeof(hdr));
+
+        while (!(hdr.dwFlags & WHDR_DONE)) Sleep(10);
+
+        waveOutUnprepareHeader(hWaveOut, &hdr, sizeof(hdr));
+        waveOutClose(hWaveOut);
+        delete[] buffer;
+        });
+    t.detach();
+}
+
+BYTE fx1(int t) { return (t >> 10 ^ t >> 11) % 5 * ((t >> 14 & 3 ^ t >> 15 & 1) + 1) * t % 99 + ((3 + (t >> 14 & 3) - (t >> 16 & 1)) / 3 * t % 99 & 64); }
+BYTE fx2(int t) { return t * ((t >> 10 | t % 16 * t >> 5) & 8 * t >> 12 & 18); }
+BYTE fx3(int t) { return (t / 2 * (4 | 7 & t >> 13) >> (~t >> 11 & 1) & 127) + (t * (t >> 11 & t >> 13) * (~t >> 9 & 3) & 127) ; }
+BYTE fx4(int t) { return t * (0xCA98CA98 >> (t >> 9 & 30) & 15) | t >> 8 ; }
+BYTE fx5(int t) { return (t / 8) >> (t >> 9) * t / ((t >> 14 & 3) + 4) ; }
+BYTE fx6(int t) { return (t / ((((t >> 3) - ((t >> 14) % 2)) % ((26 >> ((t >> 16) % 3)) | 1)) | 1)) % 1024 / 12 << 9 / (((t >> 5) % 128) | 1); }
+BYTE fx7(int t) { return (t * (t & 8192 ? 7 : 5) * (6 - (3 & t >> 8) + (3 & t >> 9)) >> (3 & -t >> (t & 2048 ? 2 : 11)) | t >> 3) ; }
+BYTE fx8(int t) { return 2 * t * (t & 16384 ? 6 : 5) * (4 - (3 & t >> 8)) >> (3 & -t >> (t & 4096 ? 2 : 15)) | t >> (t & 8192 ? t & 4096 ? 4 : 5 : 3) ; }
+
+int main() {
+    double t = 0.0;
+    HDC hdc = GetDC(NULL);
+    HDC desk = GetDC(NULL);
+    LPCWSTR text = L"A Windows 11 Coder New";
+    srand((unsigned)time(0));
+
+    int w = GetSystemMetrics(SM_CXSCREEN);
+    int h = GetSystemMetrics(SM_CYSCREEN);
+    int x = w;
+    int y = h;
+    int size = x * y;
+    int dx = (int)(x * 0.03 * sin(t * 0.7));
+    int dy = (int)(y * 0.03 * cos(t * 1.2));
+    auto end = steady_clock::now() + seconds(1);
+
+    int message = MessageBox(NULL, L"This is safe and it cannot damage your pc in any way. just press yes", L"Americium.exe - by a windows 11 coder new", MB_YESNO | MB_ICONWARNING);
+    if (message == IDNO) return 0;
+
+    threadedBytebeat(fx1, 15);
+    end = steady_clock::now() + seconds(15);
+    while (steady_clock::now() < end) {
+        BitBlt(hdc, rand() % 25, 0, w, h, hdc, 0, rand() % 25, 0x100000);
+    }
+
+    threadedBytebeat(fx2, 35);
+    end = steady_clock::now() + seconds(35);
+    while (steady_clock::now() < end) {
+        HBRUSH old = (HBRUSH)SelectObject(hdc, GetStockObject(DC_BRUSH));
+        SetDCBrushColor(hdc, RGB(rand() % 256, rand() % 256, rand() % 256));
+        int x1 = rand() % x;
+        int y1 = rand() % y;
+        int x2 = rand() % x;
+        int y2 = rand() % y;
+        Rectangle(hdc, x1, y1, x2, y2);
+        SetDCBrushColor(hdc, RGB(rand() % 256, rand() % 256, rand() % 256));
+        x1 = rand() % x;
+        y1 = rand() % y;
+        x2 = rand() % x;
+        y2 = rand() % y;
+        Ellipse(hdc, x1, y1, x2, y2);
+    }
+
+    threadedBytebeat(fx3, 20);
+    end = steady_clock::now() + seconds(20);
+    while (steady_clock::now() < end) {
+        StretchBlt(hdc, dx - 10, dy - 10, x, y, hdc, 0, 0, x - y / (x / 30), y, SRCCOPY);
+    }
+
+    threadedBytebeat(fx4, 50);
+    end = steady_clock::now() + seconds(50);
+    while (steady_clock::now() < end) {
+        StretchBlt(hdc, 12, 12, x + 18, y - 9, hdc, 2, -6, x - 25, y + 11, SRCPAINT);
+    }
+
+    threadedBytebeat(fx5, 50);
+    end = steady_clock::now() + seconds(50);
+    while (steady_clock::now() < end) {
+        text = L"A Windows 11 Coder New";
+        SetTextColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        SetBkColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        TextOutW(hdc, rand() % w, rand() % h, text, lstrlenW(text));
+        text = L"Yo Mama";
+        SetTextColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        SetBkColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        TextOutW(hdc, rand() % w, rand() % h, text, lstrlenW(text));
+        text = L"HELP";
+        SetTextColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        SetBkColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        TextOutW(hdc, rand() % w, rand() % h, text, lstrlenW(text));
+        text = L"This is crazy";
+        SetTextColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        SetBkColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        TextOutW(hdc, rand() % w, rand() % h, text, lstrlenW(text));
+        text = L"Americium.exe";
+        SetTextColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        SetBkColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        TextOutW(hdc, rand() % w, rand() % h, text, lstrlenW(text));
+        text = L"21 LOL";
+        SetTextColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        SetBkColor(hdc, RGB(rand() % 255, rand() % 255, rand() % 255));
+        TextOutW(hdc, rand() % w, rand() % h, text, lstrlenW(text));
+    }
+
+    threadedBytebeat(fx6, 10);
+    end = steady_clock::now() + seconds(10);
+    while (steady_clock::now() < end) {
+        int angle = rand() % 360;
+        int offset = rand() % 50;
+        POINT pts[3] = {
+            {offset + (int)(20 * sin(angle * 3.1415 / 180)), offset},
+            {w - offset, offset + (int)(20 * cos(angle * 3.1415 / 180))},
+            {offset, h - offset}
+        };
+        PlgBlt(hdc, pts, hdc, 0, 0, w, h, 0, 0, 0);
+    }
+
+    threadedBytebeat(fx7, 30);
+    end = steady_clock::now() + seconds(30);
+    while (steady_clock::now() < end) {
+        HDC mdc_loop = CreateCompatibleDC(hdc);
+        RGBTRIPLE* rgb_loop;
+        BITMAPINFO bmi_loop = {};
+        bmi_loop.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi_loop.bmiHeader.biWidth = x;
+        bmi_loop.bmiHeader.biHeight = -y;
+        bmi_loop.bmiHeader.biPlanes = 1;
+        bmi_loop.bmiHeader.biBitCount = 24;
+        bmi_loop.bmiHeader.biCompression = BI_RGB;
+        HBITMAP bitmap_loop = CreateDIBSection(hdc, &bmi_loop, DIB_RGB_COLORS, (void**)&rgb_loop, 0, 0);
+        if (bitmap_loop && SelectObject(mdc_loop, bitmap_loop)) {
+            BitBlt(mdc_loop, 0, 0, x, y, hdc, 0, 0, SRCCOPY);
+            for (int p = 0; p < size; p++) {
+                rgb_loop[p].rgbtRed = min(rgb_loop[p].rgbtRed + 10, 228);
+                rgb_loop[p].rgbtGreen = min(rgb_loop[p].rgbtGreen + 10, 8);
+                rgb_loop[p].rgbtBlue = min(rgb_loop[p].rgbtBlue + 10, 10);
+            }
+            BitBlt(hdc, 0, 0, x, y, mdc_loop, 0, 0, SRCCOPY);
+        }
+        if (bitmap_loop && SelectObject(mdc_loop, bitmap_loop)) {
+            BitBlt(mdc_loop, 0, 0, x, y, hdc, 0, 0, SRCCOPY);
+            for (int p = 0; p < size; p++) {
+                rgb_loop[p].rgbtRed = min(rgb_loop[p].rgbtRed + 10, 125);
+                rgb_loop[p].rgbtGreen = min(rgb_loop[p].rgbtGreen + 10, 218);
+                rgb_loop[p].rgbtBlue = min(rgb_loop[p].rgbtBlue + 10, 88);
+            }
+            BitBlt(hdc, 0, 0, x, y, mdc_loop, 0, 0, SRCCOPY);
+        }
+        if (bitmap_loop && SelectObject(mdc_loop, bitmap_loop)) {
+            BitBlt(mdc_loop, 0, 0, x, y, hdc, 0, 0, SRCCOPY);
+            for (int p = 0; p < size; p++) {
+                rgb_loop[p].rgbtRed = min(rgb_loop[p].rgbtRed + 10, 54);
+                rgb_loop[p].rgbtGreen = min(rgb_loop[p].rgbtGreen + 10, 131);
+                rgb_loop[p].rgbtBlue = min(rgb_loop[p].rgbtBlue + 10, 255);
+            }
+            BitBlt(hdc, 0, 0, x, y, mdc_loop, 0, 0, SRCCOPY);
+        }
+    }
+
+}
+
